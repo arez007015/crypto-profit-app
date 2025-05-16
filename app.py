@@ -1,43 +1,56 @@
-
 import streamlit as st
+import pandas as pd
 import matplotlib.pyplot as plt
 
-# تنظیمات اولیه صفحه
-st.set_page_config(page_title="محاسبه سود و زیان", page_icon="💰")
+st.set_page_config(page_title="Crypto DCA Profit App", layout="centered")
 
-st.title("💰 محاسبه سود و زیان معاملات ارز دیجیتال")
+st.title("💰 DCA Profit/Loss Calculator")
 
-# ورودی‌ها
-buy_price = st.number_input("قیمت خرید (تومان)", min_value=0.0, format="%.2f")
-sell_price = st.number_input("قیمت فروش (تومان)", min_value=0.0, format="%.2f")
-amount = st.number_input("تعداد ارز (مثلاً 0.5 بیت‌کوین)", min_value=0.0, format="%.4f")
-buy_fee_percent = st.number_input("کارمزد خرید (%)", min_value=0.0, value=0.4, step=0.1)
-sell_fee_percent = st.number_input("کارمزد فروش (%)", min_value=0.0, value=0.4, step=0.1)
+# Load or initialize transaction history
+if "trades" not in st.session_state:
+    st.session_state.trades = []
 
-# دکمه محاسبه
-if st.button("محاسبه سود یا زیان"):
-    if buy_price == 0 or amount == 0:
-        st.warning("لطفاً قیمت خرید و تعداد را وارد کنید.")
-    else:
-        buy_price_with_fee = buy_price * (1 + buy_fee_percent / 100)
-        sell_price_with_fee = sell_price * (1 - sell_fee_percent / 100)
+st.subheader("➕ Add New Trade")
+col1, col2, col3 = st.columns(3)
+with col1:
+    price = st.number_input("Buy Price ($)", min_value=0.0, format="%.2f")
+with col2:
+    amount = st.number_input("Amount (Coins)", min_value=0.0, format="%.6f")
+with col3:
+    date = st.date_input("Buy Date")
 
-        profit = (sell_price_with_fee - buy_price_with_fee) * amount
-        total = buy_price * amount
-        percent = (profit / total) * 100 if total else 0
+if st.button("Add Trade"):
+    st.session_state.trades.append({"date": date, "price": price, "amount": amount})
+    st.success("Trade added!")
 
-        # نمایش نتیجه
-        if profit > 0:
-            st.success(f"✅ سود: {profit:,.0f} تومان ({percent:.2f}٪)")
-        elif profit < 0:
-            st.error(f"❌ ضرر: {abs(profit):,.0f} تومان ({abs(percent):.2f}٪)")
-        else:
-            st.info("⚖️ نه سود کردید، نه ضرر.")
+# Show trade history
+if st.session_state.trades:
+    df = pd.DataFrame(st.session_state.trades)
+    df["total"] = df["price"] * df["amount"]
+    st.subheader("📋 Trade History")
+    st.dataframe(df)
 
-        # نمودار
-        fig, ax = plt.subplots()
-        color = "green" if profit > 0 else "red" if profit < 0 else "gray"
-        ax.bar(["سود/زیان"], [profit], color=color)
-        ax.set_ylabel("مقدار (تومان)")
-        ax.set_title("نمودار سود یا زیان")
-        st.pyplot(fig)
+    total_amount = df["amount"].sum()
+    total_cost = df["total"].sum()
+    avg_price = total_cost / total_amount if total_amount != 0 else 0
+
+    st.markdown(f"**🧮 Average Buy Price:** ${avg_price:.2f}")
+
+    current_price = st.number_input("💵 Current Price", value=avg_price, format="%.2f")
+    current_value = current_price * total_amount
+    profit_loss = current_value - total_cost
+    profit_percent = (profit_loss / total_cost) * 100 if total_cost != 0 else 0
+
+    st.metric("📊 Profit/Loss ($)", f"${profit_loss:.2f}", delta=f"{profit_percent:.2f}%")
+
+    # Plot chart
+    fig, ax = plt.subplots()
+    ax.axhline(avg_price, color='blue', linestyle='--', label=f'Avg Price: ${avg_price:.2f}')
+    ax.axhline(current_price, color='green', linestyle='-', label=f'Current Price: ${current_price:.2f}')
+    ax.set_title("Price Comparison")
+    ax.set_ylabel("Price ($)")
+    ax.legend()
+    st.pyplot(fig)
+
+else:
+    st.info("No trades yet. Please add a trade.")
